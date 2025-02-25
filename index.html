@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>Admin Dashboard</title>
+    <style>
+        body { 
+            font-family: Arial, sans-serif; 
+            padding: 20px; 
+            background-color: #f5f5f5;
+        }
+        .user-card { 
+            border: 1px solid #ddd; 
+            padding: 15px; 
+            margin: 10px; 
+            border-radius: 8px;
+            background-color: white;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .dashboard-header {
+            background-color: #2c3e50;
+            color: white;
+            padding: 20px;
+            margin: -20px -20px 20px -20px;
+        }
+        .button {
+            background-color: #3498db;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .button:hover {
+            background-color: #2980b9;
+        }
+        .loading {
+            text-align: center;
+            padding: 20px;
+            font-size: 18px;
+        }
+        .error {
+            color: red;
+            padding: 10px;
+            border: 1px solid red;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.5);
+        }
+        
+        .modal-content {
+            background-color: white;
+            margin: 15% auto;
+            padding: 20px;
+            border-radius: 8px;
+            width: 80%;
+            max-width: 600px;
+        }
+        
+        .form-group {
+            margin-bottom: 15px;
+        }
+        
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        
+        .form-group input {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        
+        .close {
+            float: right;
+            cursor: pointer;
+            font-size: 24px;
+        }
+        
+        .transaction-history {
+            margin-top: 10px;
+            padding: 10px;
+            background-color: #f8f9fa;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+    <div class="dashboard-header">
+        <h1>Admin Dashboard</h1>
+        <button class="button" onclick="openAddUserModal()">Add New User</button>
+    </div>
+    <div id="user-list">
+        <div class="loading">Loading users...</div>
+    </div>
+
+    <!-- Add User Modal -->
+    <div id="addUserModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeAddUserModal()">&times;</span>
+            <h2>Add New User</h2>
+            <form id="addUserForm" onsubmit="addNewUser(event)">
+                <div class="form-group">
+                    <label for="accountNumber">Account Number</label>
+                    <input type="text" id="accountNumber" required pattern="[0-9]{10}" title="Please enter 10 digits">
+                </div>
+                <div class="form-group">
+                    <label for="holderName">Account Holder Name</label>
+                    <input type="text" id="holderName" required>
+                </div>
+                <div class="form-group">
+                    <label for="email">Email</label>
+                    <input type="email" id="email" required>
+                </div>
+                <div class="form-group">
+                    <label for="ifscCode">IFSC Code</label>
+                    <input type="text" id="ifscCode"   title="Please enter valid IFSC code">
+                </div>
+                <div class="form-group">
+                    <label for="initialBalance">Initial Balance</label>
+                    <input type="number" id="initialBalance" required min="0">
+                </div>
+                <button type="submit" class="button">Add User</button>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        async function addBalance(userId, currentBalance) {
+            try {
+                const button = event.target;
+                button.disabled = true;
+                button.textContent = 'Updating...';
+
+                const response = await fetch('http://localhost:5000/update-balance', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ userId, currentBalance })
+                });
+                const data = await response.json();
+                
+                if (data.success) {
+                    alert(`Balance updated successfully to $${data.newBalance}`);
+                    location.reload();
+                } else {
+                    throw new Error(data.error);
+                }
+            } catch (error) {
+                console.error('Error updating balance:', error);
+                alert('Failed to update balance');
+            } finally {
+                button.disabled = false;
+                button.textContent = 'Add $1000';
+            }
+        }
+
+        async function fetchUsers() {
+            const userList = document.getElementById('user-list');
+            
+            try {
+                const response = await fetch('http://localhost:5000/users');
+                const users = await response.json();
+                
+                console.log('Received users data:', users);
+
+                if (!Array.isArray(users)) {
+                    throw new Error('Invalid data received from server');
+                }
+
+                if (users.length === 0) {
+                    userList.innerHTML = '<p>No users found in database.</p>';
+                    return;
+                }
+
+                userList.innerHTML = '';
+
+                users.forEach(user => {
+                    console.log('Processing user:', user);
+                    
+                    const userCard = document.createElement('div');
+                    userCard.className = 'user-card';
+                    
+                    // Create HTML for subcollections
+                    let collectionsHTML = '';
+                    if (user.collections) {
+                        for (const [collName, collData] of Object.entries(user.collections)) {
+                            collectionsHTML += `
+                                <div class="subcollection">
+                                    <h4>${collName}</h4>
+                                    <ul>
+                                        ${collData.map(item => `
+                                            <li>${Object.entries(item).map(([key, value]) => 
+                                                `<strong>${key}:</strong> ${value}`
+                                            ).join(', ')}</li>
+                                        `).join('')}
+                                    </ul>
+                                </div>
+                            `;
+                        }
+                    }
+
+                    userCard.innerHTML = `
+                        <p><strong>ID:</strong> ${user.id}</p>
+                        <p><strong>Name:</strong> ${user.name || 'N/A'}</p>
+                        <p><strong>Email:</strong> ${user.email || 'N/A'}</p>
+                        <p><strong>Balance:</strong> $${user.balance || 0}</p>
+                        ${collectionsHTML}
+                        <button 
+                            class="button" 
+                            onclick="addBalance('${user.id}', ${user.balance || 0})"
+                        >
+                            Add $1000
+                        </button>
+                    `;
+                    userList.appendChild(userCard);
+                });
+            } catch (error) {
+                console.error("Error fetching users:", error);
+                userList.innerHTML = `
+                    <div class="error">
+                        Error loading users. Please check if the server is running.
+                        <br>
+                        Details: ${error.message}
+                    </div>
+                `;
+            }
+        }
+
+        function openAddUserModal() {
+            document.getElementById('addUserModal').style.display = 'block';
+        }
+
+        function closeAddUserModal() {
+            document.getElementById('addUserModal').style.display = 'none';
+        }
+
+        async function addNewUser(event) {
+            event.preventDefault();
+            
+            const userData = {
+                accountNumber: document.getElementById('accountNumber').value,
+                holderName: document.getElementById('holderName').value,
+                email: document.getElementById('email').value,
+                ifscCode: document.getElementById('ifscCode').value,
+                balance: Number(document.getElementById('initialBalance').value),
+                createdDate: new Date().toISOString(),
+                transactions: []
+            };
+
+            try {
+                const response = await fetch('http://localhost:5000/add-user', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(userData)
+                });
+
+                const data = await response.json();
+                
+                if (data.success) {
+                    alert('User added successfully!');
+                    closeAddUserModal();
+                    fetchUsers();
+                } else {
+                    throw new Error(data.error);
+                }
+            } catch (error) {
+                console.error('Error adding user:', error);
+                alert('Failed to add user: ' + error.message);
+            }
+        }
+
+        // Initial fetch
+        fetchUsers();
+
+        // Refresh data every 30 seconds
+        setInterval(fetchUsers, 30000);
+    </script>
+</body>
+</html>
